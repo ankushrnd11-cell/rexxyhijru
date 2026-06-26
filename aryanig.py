@@ -4,7 +4,7 @@ import threading
 import urllib.parse
 import requests
 import json
-from flask import Flask, jsonify
+from flask import Flask, jsonify, render_template_string
 from instagrapi import Client  # [web:16]
 
 # --------- CONFIG (via env) ----------
@@ -43,19 +43,68 @@ session_logs = {
 }
 logs_lock = threading.Lock()
 
-account_stats = {
-    f"acc{i}": {
-        "username": f"acc{i}",
-        "online": False,
+BOT_START_TIME = time.time()
+
+dashboard_stats = {
+    "acc1": {
+        "username": "-",
+        "active": False,
         "messages_sent": 0,
-        "failed_messages": 0,
-        "graphql_renamed": 0,
-        "failed_graphql": 0,
-        "current_thread": "-",
-        "rename_graph": [],
-        "start_time": time.time()
+        "messages_failed": 0,
+        "renames_done": 0,
+        "renames_failed": 0,
+        "current_thread": "-"
+    },
+
+    "acc2": {
+        "username": "-",
+        "active": False,
+        "messages_sent": 0,
+        "messages_failed": 0,
+        "renames_done": 0,
+        "renames_failed": 0,
+        "current_thread": "-"
+    },
+
+    "acc3": {
+        "username": "-",
+        "active": False,
+        "messages_sent": 0,
+        "messages_failed": 0,
+        "renames_done": 0,
+        "renames_failed": 0,
+        "current_thread": "-"
+    },
+
+    "acc4": {
+        "username": "-",
+        "active": False,
+        "messages_sent": 0,
+        "messages_failed": 0,
+        "renames_done": 0,
+        "renames_failed": 0,
+        "current_thread": "-"
+    },
+
+    "acc5": {
+        "username": "-",
+        "active": False,
+        "messages_sent": 0,
+        "messages_failed": 0,
+        "renames_done": 0,
+        "renames_failed": 0,
+        "current_thread": "-"
+    },
+
+    "acc6": {
+        "username": "-",
+        "active": False,
+        "messages_sent": 0,
+        "messages_failed": 0,
+        "renames_done": 0,
+        "renames_failed": 0,
+        "current_thread": "-"
     }
-    for i in range(1, 7)
 }
 
 def _push_log(session, msg):
@@ -94,185 +143,180 @@ def summarize(lines):
 
 @app.route("/status")
 def status():
-    with logs_lock:
-        acc1_logs = session_logs["acc1"][-80:]
-        acc2_logs = session_logs["acc2"][-80:]
-        acc3_logs = session_logs["acc3"][-80:]
-        acc4_logs = session_logs["acc4"][-80:]
-        acc5_logs = session_logs["acc5"][-80:]
-        acc6_logs = session_logs["acc6"][-80:]   
-        system_last = session_logs["system"][-5:]
 
-    return jsonify({
-        "ok": True,
-        "acc1": summarize(acc1_logs),
-        "acc2": summarize(acc2_logs),
-        "acc3": summarize(acc3_logs),
-        "acc4": summarize(acc4_logs),
-        "acc5": summarize(acc5_logs),
-        "acc6": summarize(acc6_logs),
-        "system_last": system_last
-    })
-
-from flask import render_template_string
-
-SCRIPT_START_TIME = time.time()
-
-@app.route("/dashboard")
-def dashboard():
-
-    runtime = int(time.time() - SCRIPT_START_TIME)
+    runtime = int(time.time() - BOT_START_TIME)
 
     hours = runtime // 3600
     minutes = (runtime % 3600) // 60
     seconds = runtime % 60
 
-    total_runtime = f"{hours:02d}h {minutes:02d}m {seconds:02d}s"
+    runtime_str = f"{hours:02}:{minutes:02}:{seconds:02}"
 
-    sessions = [
-        SESSION_ID_1,
-        SESSION_ID_2,
-        SESSION_ID_3,
-        SESSION_ID_4,
-        SESSION_ID_5,
-        SESSION_ID_6,
-    ]
+    return jsonify({
 
-    cards = []
+        "runtime": runtime_str,
 
-    for i, sid in enumerate(sessions, 1):
+        "accounts": dashboard_stats,
 
-        if not sid:
-            continue
+        "system": session_logs["system"][-20:]
 
-        acc = f"acc{i}"
-        s = account_stats[acc]
+    })
 
-        cards.append({
-            "username": s["username"],
-            "session": acc,
-            "online": s["online"],
-            "messages": s["messages_sent"],
-            "failed": s["failed_messages"],
-            "renamed": s["graphql_renamed"],
-            "failedrename": s["failed_graphql"],
-            "thread": s["current_thread"],
-            "graph": ",".join(map(str, s["rename_graph"]))
-        })
-
+@app.route("/dashboard")
+def dashboard():
     return render_template_string("""
 <!DOCTYPE html>
 <html>
 <head>
 
-<meta charset="UTF-8">
-<meta http-equiv="refresh" content="2">
-
 <title>SINISTERS ⚡ SX⁷</title>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<meta charset="utf-8">
+
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
 
 <style>
 
 *{
+margin:0;
+padding:0;
 box-sizing:border-box;
+font-family:Orbitron,sans-serif;
 }
 
 body{
-margin:0;
-padding:35px;
-background:#050505;
-font-family:Arial,Helvetica,sans-serif;
+
+background:#05070d;
+
 color:white;
+
+padding:35px;
+
 }
 
 .header{
-background:rgba(255,255,255,.05);
-backdrop-filter:blur(15px);
-border:2px solid cyan;
-border-radius:22px;
-padding:30px;
+
+font-size:48px;
+
 text-align:center;
-box-shadow:0 0 18px cyan,0 0 45px cyan;
+
+padding:25px;
+
+border:2px solid cyan;
+
+border-radius:20px;
+
+box-shadow:0 0 30px cyan;
+
 margin-bottom:35px;
-animation:glow 2s infinite alternate;
+
 }
 
-.title{
-font-size:42px;
-font-weight:bold;
-color:#00ffff;
-}
+#runtime{
 
-.runtime{
-margin-top:15px;
-font-size:18px;
-color:#8cfbff;
+width:350px;
+
+margin:auto;
+
+padding:15px;
+
+text-align:center;
+
+font-size:28px;
+
+border:2px solid #4cc9ff;
+
+border-radius:15px;
+
+box-shadow:0 0 20px #4cc9ff;
+
+margin-bottom:35px;
+
 }
 
 .grid{
+
 display:grid;
-grid-template-columns:repeat(auto-fit,minmax(360px,1fr));
-gap:24px;
+
+grid-template-columns:repeat(auto-fit,minmax(450px,1fr));
+
+gap:30px;
+
 }
 
 .card{
-background:#111111;
-border:2px solid cyan;
+
+background:#0a1220;
+
+border:2px solid #2f7fff;
+
 border-radius:20px;
-padding:22px;
-transition:.3s;
-box-shadow:0 0 15px cyan,0 0 35px cyan;
-backdrop-filter:blur(10px);
+
+padding:25px;
+
+box-shadow:0 0 25px #2f7fff;
+
+position:relative;
+
 }
 
-.card:hover{
-box-shadow:0 0 25px cyan,0 0 60px cyan;
-transform:translateY(-3px);
-}
+.username{
 
-.top{
-display:flex;
-justify-content:space-between;
-align-items:center;
+font-size:24px;
+
 margin-bottom:20px;
+
+color:#66e3ff;
+
 }
 
-.badge{
-padding:6px 15px;
-border:1px solid cyan;
-border-radius:12px;
-color:#00ffff;
-box-shadow:0 0 10px cyan;
+.status{
+
+font-size:30px;
+
+font-weight:bold;
+
+margin-bottom:20px;
+
 }
 
-.session{
-font-size:13px;
-opacity:.7;
-margin-top:4px;
+table{
+
+width:100%;
+
+font-size:18px;
+
 }
 
-.stat{
-display:flex;
-justify-content:space-between;
-margin:10px 0;
-font-size:17px;
+td{
+
+padding:10px 0;
+
 }
 
-canvas{
-margin-top:20px;
-height:120px!important;
+.label{
+
+color:#78dfff;
+
 }
 
-@keyframes glow{
+.value{
 
-from{
-text-shadow:0 0 10px cyan;
+text-align:right;
+
+color:white;
+
 }
 
-to{
-text-shadow:0 0 30px cyan;
+.active{
+
+color:#39ff6e;
+
 }
+
+.inactive{
+
+color:#ff4d4d;
 
 }
 
@@ -284,173 +328,110 @@ text-shadow:0 0 30px cyan;
 
 <div class="header">
 
-<div class="title">
-
 SINISTERS ⚡ SX⁷
 
 </div>
 
-<div class="runtime">
+<div id="runtime">
 
-RUNTIME ⌛ {{total_runtime}}
-
-</div>
+Loading...
 
 </div>
 
-<div class="grid">
+<div class="grid" id="cards">
 
-{% for c in cards %}
+</div>
+
+<script>
+
+async function loadDashboard(){
+
+let r=await fetch("/status");
+
+let data=await r.json();
+
+document.getElementById("runtime").innerHTML=
+"⌛ Runtime : "+data.runtime;
+
+let html="";
+
+for(let i=1;i<=6;i++){
+
+let acc=data.accounts["acc"+i];
+
+html+=`
 
 <div class="card">
 
-<div class="top">
+<div class="username">
 
-<div>
-
-{% if c.online %}
-
-🟢 Online
-
-{% else %}
-
-🔴 Offline
-
-{% endif %}
-
-<div class="session">
-
-{{c.username}}
+👤 ${acc.username}
 
 </div>
 
-</div>
+<div class="status ${acc.active?"active":"inactive"}">
 
-<div class="badge">
-
-{{c.username}}
+${acc.active?"🟢 ACTIVE":"🔴 INACTIVE"}
 
 </div>
 
+<table>
+
+<tr>
+
+<td class="label">Messages Sent</td>
+
+<td class="value">${acc.messages_sent}</td>
+
+</tr>
+
+<tr>
+
+<td class="label">Failed Messages</td>
+
+<td class="value">${acc.messages_failed}</td>
+
+</tr>
+
+<tr>
+
+<td class="label">Renames</td>
+
+<td class="value">${acc.renames_done}</td>
+
+</tr>
+
+<tr>
+
+<td class="label">Failed Renames</td>
+
+<td class="value">${acc.renames_failed}</td>
+
+</tr>
+
+<tr>
+
+<td class="label">Current Thread</td>
+
+<td class="value">${acc.current_thread}</td>
+
+</tr>
+
+</table>
+
 </div>
 
-<div class="stat">
-
-<span>Messages Sent</span>
-
-<b>{{c.messages}}</b>
-
-</div>
-
-<div class="stat">
-
-<span>Failed Messages</span>
-
-<b>{{c.failed}}</b>
-
-</div>
-
-<div class="stat">
-
-<span>GraphQL Renames</span>
-
-<b>{{c.renamed}}</b>
-
-</div>
-
-<div class="stat">
-
-<span>Failed Renames</span>
-
-<b>{{c.failedrename}}</b>
-
-</div>
-
-<div class="stat">
-
-<span>Current Thread</span>
-
-<b>{{c.thread}}</b>
-
-</div>
-
-<canvas id="g{{loop.index}}"></canvas>
-
-<script>
-
-new Chart(document.getElementById("g{{loop.index}}"),{
-
-type:"line",
-
-data:{
-
-labels:[{% for i in range(c.graph.split(",")|length) %}{{i}},{% endfor %}],
-
-datasets:[{
-
-data:[{{c.graph}}],
-
-borderColor:"#00ffff",
-
-borderWidth:2,
-
-fill:false,
-
-tension:.4
-
-}]
-
-},
-
-options:{
-
-responsive:true,
-
-plugins:{
-
-legend:{
-
-display:false
+`;
 
 }
 
-},
-
-scales:{
-
-x:{
-
-display:false
-
-},
-
-y:{
-
-display:false
+document.getElementById("cards").innerHTML=html;
 
 }
 
-}
+loadDashboard();
 
-}
-
-});
-
-</script>
-
-</div>
-
-{% endfor %}
-
-</div>
-
-<script>
-
-setInterval(function(){
-
-location.reload();
-
-},2000);
+setInterval(loadDashboard,2000);
 
 </script>
 
@@ -458,7 +439,7 @@ location.reload();
 
 </html>
 
-""", cards=cards, total_runtime=total_runtime)
+""")
 
 # --------- Utility helpers ----------
 def decode_session(session):
@@ -472,33 +453,62 @@ def decode_session(session):
 # --------- Instagram helpers ----------
 def login_session(session_id, name_hint=""):
     session_id = decode_session(session_id)
+    
     try:
         cl = Client()
-        cl.login_by_sessionid(session_id)  # [web:16]
+        cl.login_by_sessionid(session_id)
+
         uname = getattr(cl, "username", None) or name_hint or "unknown"
+
+        if name_hint in dashboard_stats:
+            dashboard_stats[name_hint]["username"] = uname
+            dashboard_stats[name_hint]["active"] = True
+
         log(f"✅ Logged in {uname}", session=name_hint or "system")
-        account_stats[name_hint]["online"] = True
-        account_stats[name_hint]["username"] = uname
-        account_stats[name_hint]["start_time"] = time.time()
+
         return cl
+
     except Exception as e:
-        log(f"❌ Login failed ({name_hint}): {e}", session=name_hint or "system")
-        if name_hint in account_stats:
-           account_stats[name_hint]["online"] = False
+
+        if name_hint in dashboard_stats:
+            dashboard_stats[name_hint]["active"] = False
+            dashboard_stats[name_hint]["username"] = "-"
+
+        log(
+            f"❌ Login failed ({name_hint}): {e}",
+            session=name_hint or "system"
+        )
+
         return None
 
 def safe_send_message(cl, gid, msg, acc_name):
     try:
-        cl.direct_send(msg, thread_ids=[int(gid)])  # [web:16]
-        log(f"✅ {getattr(cl,'username','?')} sent to {gid}", session=acc_name)
-        account_stats[acc_name]["messages_sent"] += 1
-        account_stats[acc_name]["current_thread"] = str(gid)
+        cl.direct_send(msg, thread_ids=[int(gid)])
+
+        if acc_name in dashboard_stats:
+            dashboard_stats[acc_name]["messages_sent"] += 1
+            dashboard_stats[acc_name]["current_thread"] = str(gid)
+
+        log(
+            f"✅ {getattr(cl,'username','?')} sent to {gid}",
+            session=acc_name
+        )
+
         return True
+
     except Exception as e:
-        log(f"⚠ Send failed ({getattr(cl,'username','?')}) -> {gid}: {e}", session=acc_name)
-        account_stats[acc_name]["failed_messages"] += 1
-        account_stats[acc_name]["current_thread"] = str(gid)
+
+        if acc_name in dashboard_stats:
+            dashboard_stats[acc_name]["messages_failed"] += 1
+            dashboard_stats[acc_name]["current_thread"] = str(gid)
+
+        log(
+            f"⚠ Send failed ({getattr(cl,'username','?')}) -> {gid}: {e}",
+            session=acc_name
+        )
+
         return False
+
 
 def safe_change_title_direct(cl, gid, new_title, acc_name):
     try:
@@ -506,10 +516,24 @@ def safe_change_title_direct(cl, gid, new_title, acc_name):
 
         try:
             tt.update_title(new_title)
-        except Exception:
-            pass
 
-        
+            if acc_name in dashboard_stats:
+                dashboard_stats[acc_name]["renames_done"] += 1
+                dashboard_stats[acc_name]["current_thread"] = str(gid)
+
+            log(
+                f"📝 {getattr(cl,'username','?')} changed title (direct) for {gid} -> {new_title}",
+                session=acc_name
+            )
+
+            return True
+
+        except Exception:
+            log(
+                f"⚠ direct .update_title() failed for {gid} — will attempt GraphQL fallback",
+                session=acc_name
+            )
+
     except Exception:
         pass
 
@@ -520,80 +544,66 @@ def safe_change_title_direct(cl, gid, new_title, acc_name):
             "X-Requested-With": "XMLHttpRequest",
             "Referer": f"https://www.instagram.com/direct/t/{gid}/",
         }
-        cookies = {"csrftoken": CSRF_TOKEN}
-        try:
-            cl.private.headers.update(headers)
-            cl.private.cookies.update(cookies)
-            variables = {"thread_fbid": gid, "new_title": new_title}
-            payload = {"doc_id": DOC_ID, "variables": json.dumps(variables)}
-            resp = cl.private.post("https://www.instagram.com/api/graphql/", data=payload, timeout=10)
-            try:
-                result = resp.json()
-                if "errors" in result:
-                    account_stats[acc_name]["failed_graphql"] += 1
-                    account_stats[acc_name]["current_thread"] = str(gid)
 
-                    account_stats[acc_name]["rename_graph"].append(0)
+        cookies = {
+            "csrftoken": CSRF_TOKEN
+        }
 
-                    if len(account_stats[acc_name]["rename_graph"]) > 25:
-                        account_stats[acc_name]["rename_graph"].pop(0)
+        cl.private.headers.update(headers)
+        cl.private.cookies.update(cookies)
 
-                    log(
-                        f"❌ GraphQL title change errors for {gid}: {result['errors']}",
-                        session=acc_name
-                    )
+        variables = {
+            "thread_fbid": gid,
+            "new_title": new_title
+        }
 
-                    return False
-                log(
-                    f"📝 {getattr(cl,'username','?')} changed title (graphql) for {gid} -> {new_title}",
-                    session=acc_name
-                )
-                
-                account_stats[acc_name]["graphql_renamed"] += 1
-                account_stats[acc_name]["current_thread"] = str(gid)
+        payload = {
+            "doc_id": DOC_ID,
+            "variables": json.dumps(variables)
+        }
 
-                account_stats[acc_name]["rename_graph"].append(1)
+        resp = cl.private.post(
+            "https://www.instagram.com/api/graphql/",
+            data=payload,
+            timeout=10
+        )
 
-                if len(account_stats[acc_name]["rename_graph"]) > 25:
-                    account_stats[acc_name]["rename_graph"].pop(0)
-                    
-                return True
-            except Exception as e:
-                account_stats[acc_name]["failed_graphql"] += 1
-                account_stats[acc_name]["current_thread"] = str(gid)
+        result = resp.json()
 
-                account_stats[acc_name]["rename_graph"].append(0)
+        if "errors" in result:
 
-                if len(account_stats[acc_name]["rename_graph"]) > 25:
-                    account_stats[acc_name]["rename_graph"].pop(0)
+            if acc_name in dashboard_stats:
+                dashboard_stats[acc_name]["renames_failed"] += 1
+                dashboard_stats[acc_name]["current_thread"] = str(gid)
 
-                log(
-                    f"⚠ Title change unexpected response for {gid}: {e} (status {resp.status_code})",
-                
-                    session=acc_name
-                )
+            log(
+                f"❌ GraphQL title change errors for {gid}: {result['errors']}",
+                session=acc_name
+            )
 
-                return False
-        except Exception as e:
-            account_stats[acc_name]["failed_graphql"] += 1
-            account_stats[acc_name]["current_thread"] = str(gid)
-
-            account_stats[acc_name]["rename_graph"].append(0)
-
-            if len(account_stats[acc_name]["rename_graph"]) > 25:
-                account_stats[acc_name]["rename_graph"].pop(0)
-            log(f"⚠ Exception performing GraphQL title change for {gid}: {e}", session=acc_name)
             return False
+
+        if acc_name in dashboard_stats:
+            dashboard_stats[acc_name]["renames_done"] += 1
+            dashboard_stats[acc_name]["current_thread"] = str(gid)
+
+        log(
+            f"📝 {getattr(cl,'username','?')} changed title (graphql) for {gid} -> {new_title}",
+            session=acc_name
+        )
+
+        return True
+
     except Exception as e:
-        account_stats[acc_name]["failed_graphql"] += 1
-        account_stats[acc_name]["current_thread"] = str(gid)
 
-        account_stats[acc_name]["rename_graph"].append(0)
+        if acc_name in dashboard_stats:
+            dashboard_stats[acc_name]["renames_failed"] += 1
+            dashboard_stats[acc_name]["current_thread"] = str(gid)
 
-        if len(account_stats[acc_name]["rename_graph"]) > 25:
-            account_stats[acc_name]["rename_graph"].pop(0)
-
-        log(f"⚠ Unexpected fallback error for title change {gid}: {e}", session=acc_name)
+        log(
+            f"⚠ Title change failed for {gid}: {e}",
+            session=acc_name
+        )
 
         return False
 
