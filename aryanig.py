@@ -229,6 +229,7 @@ RUNTIME ⏳ {runtime_text}
 <div class="container">
 """
 
+    print(USERS)
     for user in USERS:
 
         html += f"""
@@ -313,6 +314,7 @@ def login_session(session_id, name_hint=""):
 def safe_send_message(cl, gid, msg, acc_name):
     try:
         cl.direct_send(msg, thread_ids=[int(gid)])  # [web:16]
+        print("UI:", acc_name, gid)
         ui_log(acc_name, f"📨 SENT - {gid}")
         return True
     except Exception as e:
