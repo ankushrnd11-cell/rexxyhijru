@@ -4,24 +4,24 @@ import threading
 import urllib.parse
 import requests
 import json
-import logging
 from flask import Flask, jsonify
 from instagrapi import Client  # [web:16]
 
+# --------- CONFIG (via env) ----------
 SESSION_ID_1 = os.getenv("SESSION_ID_1")
 SESSION_ID_2 = os.getenv("SESSION_ID_2")
 SESSION_ID_3 = os.getenv("SESSION_ID_3")
 SESSION_ID_4 = os.getenv("SESSION_ID_4")
 SESSION_ID_5 = os.getenv("SESSION_ID_5")
 SESSION_ID_6 = os.getenv("SESSION_ID_6")
-GROUP_IDS = os.getenv("GROUP_IDS", "")
+GROUP_IDS = os.getenv("GROUP_IDS", "")  # comma separated thread ids
 MESSAGE_TEXT = os.getenv("MESSAGE_TEXT", "Hello 👋")
 SELF_URL = os.getenv("SELF_URL", "")
 NC_TITLES_RAW = os.getenv("NC_TITLES", "") 
 SPAM_START_OFFSET = int(os.getenv("SPAM_START_OFFSET", "1"))
-BASE_MESSAGE_INTERVAL = float(os.getenv("BASE_MESSAGE_INTERVAL", "40"))
+SPAM_GAP_BETWEEN_ACCOUNTS = int(os.getenv("SPAM_GAP_BETWEEN_ACCOUNTS", "6"))
 NC_START_OFFSET = int(os.getenv("NC_START_OFFSET", "1"))
-BASE_RENAME_INTERVAL = float(os.getenv("BASE_RENAME_INTERVAL", "180"))
+NC_ACC_GAP = int(os.getenv("NC_ACC_GAP", "30"))
 
 MSG_REFRESH_DELAY = int(os.getenv("MSG_REFRESH_DELAY", "1"))
 BURST_COUNT = int(os.getenv("BURST_COUNT", "1"))
@@ -30,20 +30,8 @@ COOLDOWN_ON_ERROR = int(os.getenv("COOLDOWN_ON_ERROR", "300"))
 DOC_ID = os.getenv("DOC_ID", "29088580780787855")
 CSRF_TOKEN = os.getenv("CSRF_TOKEN", "")
 
-logging.getLogger("werkzeug").setLevel(logging.ERROR)
-
 app = Flask(__name__)
 MAX_SESSION_LOGS = 200
-USERS = []
-
-logs_ui = {
-    "acc1": [],
-    "acc2": [],
-    "acc3": [],
-    "acc4": [],
-    "acc5": [],
-    "acc6": [],
-}
 session_logs = {
     "acc1": [],
     "acc2": [],
@@ -52,14 +40,6 @@ session_logs = {
     "acc5": [],
     "acc6": [],
     "system": []
-}
-account_names = {
-    "acc1": "Waiting...",
-    "acc2": "Waiting...",
-    "acc3": "Waiting...",
-    "acc4": "Waiting...",
-    "acc5": "Waiting...",
-    "acc6": "Waiting..."
 }
 logs_lock = threading.Lock()
 
@@ -74,16 +54,8 @@ def _push_log(session, msg):
 
 def log(msg, session="system"):
     line = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}"
-
     print(line, flush=True)
-
     _push_log(session, msg)
-
-    if session in logs_ui:
-        logs_ui[session].append(line)
-
-        if len(logs_ui[session]) > MAX_SESSION_LOGS:
-            logs_ui[session].pop(0)
 
 
 @app.route("/health")
@@ -127,260 +99,6 @@ def status():
         "system_last": system_last
     })
 
-@app.route("/dashboard")
-def dashboard():
-
-    html = """
-<!DOCTYPE html>
-<html>
-
-<head>
-
-<title>SINISTERS | SX⁷</title>
-
-<meta http-equiv="refresh" content="2">
-
-<style>
-
-*{
-    margin:0;
-    padding:0;
-    box-sizing:border-box;
-    font-family:Consolas,monospace;
-}
-
-body{
-
-    background:#0d1117;
-
-    color:#00ff88;
-
-    padding:20px;
-
-}
-
-.header{
-
-    width:100%;
-
-    text-align:center;
-
-    font-size:34px;
-
-    font-weight:bold;
-
-    color:#00ff88;
-
-    border:2px solid #00ff88;
-
-    border-radius:12px;
-
-    padding:18px;
-
-    margin-bottom:25px;
-
-    box-shadow:
-        0 0 10px #00ff88,
-        0 0 25px #00ff88;
-
-    text-shadow:
-        0 0 8px #00ff88;
-
-}
-
-.container{
-
-    display:grid;
-
-    grid-template-columns:repeat(auto-fit,minmax(340px,1fr));
-
-    gap:20px;
-
-}
-
-.panel{
-
-    background:#111827;
-
-    border:2px solid #00ff88;
-
-    border-radius:12px;
-
-    box-shadow:
-        0 0 8px #00ff88;
-
-    overflow:hidden;
-
-    height:78vh;
-
-    display:flex;
-
-    flex-direction:column;
-
-}
-
-.panel-title{
-
-    position:sticky;
-
-    top:0;
-
-    background:#0b1320;
-
-    padding:14px;
-
-    text-align:center;
-
-    font-size:18px;
-
-    font-weight:bold;
-
-    border-bottom:2px solid #00ff88;
-
-    color:#00ff88;
-
-    z-index:10;
-
-}
-
-.logs{
-
-    flex:1;
-
-    overflow-y:auto;
-
-    padding:12px;
-
-}
-
-.log-line{
-
-    margin-bottom:8px;
-
-    white-space:pre-wrap;
-
-    word-break:break-word;
-
-}
-
-.logs::-webkit-scrollbar{
-
-    width:8px;
-
-}
-
-.logs::-webkit-scrollbar-thumb{
-
-    background:#00ff88;
-
-    border-radius:20px;
-
-}
-
-.panel:hover{
-
-    box-shadow:
-        0 0 20px #00ff88;
-
-}
-
-.footer{
-
-    text-align:center;
-
-    color:#00ff88;
-
-    opacity:.7;
-
-    margin-top:18px;
-
-    font-size:13px;
-
-}
-
-</style>
-
-</head>
-
-<body>
-
-<div class="header">
-
-✦ SINISTERS ⚡ SX⁷ ✦
-
-</div>
-
-<div class="container">
-"""
-
-    for user in USERS:
-
-        html += f"""
-
-<div class="panel">
-
-<div class="panel-title">
-
-🟢 {account_names.get(user, user)}
-
-</div>
-
-<div class="logs">
-"""
-
-        if logs_ui[user]:
-
-            for line in logs_ui[user]:
-
-                html += f'<div class="log-line">{line}</div>'
-
-        else:
-
-            html += '<div class="log-line">Waiting for activity...</div>'
-
-        html += """
-
-</div>
-
-</div>
-
-"""
-
-    html += """
-
-</div>
-
-<div class="footer">
-
-LIVE DASHBOARD • AUTO REFRESH EVERY 2 SECONDS
-
-</div>
-
-<script>
-
-function scrollPanels(){
-
-    document.querySelectorAll(".logs").forEach(function(panel){
-
-        panel.scrollTop=panel.scrollHeight;
-
-    });
-
-}
-
-window.onload=scrollPanels;
-
-setInterval(scrollPanels,1000);
-
-</script>
-
-</body>
-
-</html>
-
-"""
-
-    return html
 # --------- Utility helpers ----------
 def decode_session(session):
     if not session:
@@ -397,9 +115,6 @@ def login_session(session_id, name_hint=""):
         cl = Client()
         cl.login_by_sessionid(session_id)  # [web:16]
         uname = getattr(cl, "username", None) or name_hint or "unknown"
-        account_names[name_hint] = uname
-        if name_hint not in USERS:
-            USERS.append(name_hint)
         log(f"✅ Logged in {uname}", session=name_hint or "system")
         return cl
     except Exception as e:
@@ -469,7 +184,6 @@ def safe_change_title_direct(cl, gid, new_title, acc_name):
         except Exception as e:
             log(f"⚠ Exception performing GraphQL title change for {gid}: {e}", session=acc_name)
             return False
-
     except Exception as e:
         log(f"⚠ Unexpected fallback error for title change {gid}: {e}", session=acc_name)
         return False
@@ -486,10 +200,6 @@ def spam_loop(accounts, groups):
     n = len(accounts)
 
     while True:
-        active_accounts = max(
-            1,
-            sum(1 for a in accounts if a["active"] and a["client"])
-        )
         acc = accounts[idx]
         acc_name = acc["name"]
 
@@ -519,7 +229,7 @@ def spam_loop(accounts, groups):
             log(f"❌ Exception in {acc_name} message loop: {e}", session=acc_name)
             acc["cooldown_until"] = time.time() + COOLDOWN_ON_ERROR
 
-        time.sleep(BASE_MESSAGE_INTERVAL / active_accounts)
+        time.sleep(SPAM_GAP_BETWEEN_ACCOUNTS)
         idx = (idx + 1) % n
 
 
@@ -548,10 +258,6 @@ def nc_loop(accounts, groups, titles_map):
     n = len(accounts)
 
     while True:
-        active_accounts = max(
-            1,
-            sum(1 for a in accounts if a["active"] and a["client"])
-        )
         acc = accounts[idx]
         acc_name = acc["name"]
         account_title = per_account_titles[idx]
@@ -580,7 +286,7 @@ def nc_loop(accounts, groups, titles_map):
             log(f"❌ Exception in {acc_name} nc loop: {e}", session=acc_name)
             acc["cooldown_until"] = time.time() + COOLDOWN_ON_ERROR
 
-        time.sleep(BASE_RENAME_INTERVAL / active_accounts)
+        time.sleep(NC_ACC_GAP)
         idx = (idx + 1) % n
 
 
@@ -654,14 +360,22 @@ def start_bot():
     try:
         t1 = threading.Thread(target=spam_loop, args=(accounts, groups), daemon=True)
         t1.start()
-        log("▶ Started spam loop", session="system")
+        log(
+            "▶ Started spam loop with 6 slots "
+            f"({SPAM_START_OFFSET}s start, {SPAM_GAP_BETWEEN_ACCOUNTS}s gap between slots)",
+            session="system"
+        )
     except Exception as e:
         log(f"❌ Failed to start spam loop thread: {e}", session="system")
 
     try:
         t2 = threading.Thread(target=nc_loop, args=(accounts, groups, titles_map), daemon=True)
         t2.start()
-        log("▶ Started rename loop", session="system")
+        log(
+            "▶ Started nc loop with 6 slots "
+            f"({NC_START_OFFSET}s start, {NC_ACC_GAP}s gap between slots)",
+            session="system"
+        )
     except Exception as e:
         log(f"❌ Failed to start nc loop thread: {e}", session="system")
 
@@ -683,17 +397,8 @@ run_bot_once()
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "10000"))
-
+    log(f"HTTP server starting on port {port}", session="system")
     try:
-        app.logger.disabled = True
-        logging.getLogger("werkzeug").disabled = True
-
-        app.run(
-            host="0.0.0.0",
-            port=port,
-            debug=False,
-            use_reloader=False
-        )
-
+        app.run(host="0.0.0.0", port=port)
     except Exception as e:
         log(f"❌ Flask run failed: {e}", session="system")
