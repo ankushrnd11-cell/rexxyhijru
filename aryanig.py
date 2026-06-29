@@ -100,115 +100,256 @@ def status():
 
 @app.route("/dashboard")
 def dashboard():
+
     html = """
-    <html>
-    <head>
-        <title>SINISTERS | SX⁷</title>
-        <meta http-equiv="refresh" content="2">
-        <style>
-            body{
-                background:#0d1117;
-                color:#00ff88;
-                font-family:Consolas,monospace;
-                margin:0;
-                padding:20px;
-            }
+<!DOCTYPE html>
+<html>
 
-            .header{
-                text-align:center;
-                font-size:30px;
-                font-weight:bold;
-                border:2px solid #00ff88;
-                padding:15px;
-                margin-bottom:25px;
-                box-shadow:0 0 20px #00ff88;
-            }
+<head>
 
-            .container{
-                display:flex;
-                flex-wrap:wrap;
-                gap:20px;
-            }
+<title>SINISTERS | SX⁷</title>
 
-            .panel{
-                flex:1;
-                min-width:320px;
-                background:#111827;
-                border:2px solid #00ff88;
-                box-shadow:0 0 15px #00ff88;
-                padding:15px;
-                height:80vh;
-                overflow-y:auto;
-            }
+<meta http-equiv="refresh" content="2">
 
-            .panel-title{
-                text-align:center;
-                font-size:18px;
-                font-weight:bold;
-                margin-bottom:12px;
-                border-bottom:1px solid #00ff88;
-                padding-bottom:8px;
-            }
+<style>
 
-            .log-line{
-                margin-bottom:6px;
-                white-space:pre-wrap;
-                word-break:break-word;
-            }
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:Consolas,monospace;
+}
 
-            ::-webkit-scrollbar{
-                width:6px;
-            }
+body{
 
-            ::-webkit-scrollbar-thumb{
-                background:#00ff88;
-            }
-        </style>
-    </head>
+    background:#0d1117;
 
-    <body>
+    color:#00ff88;
 
-        <div class="header">
-            ✦ SINISTERS ⚡ SX⁷ ✦
-        </div>
+    padding:20px;
 
-        <div class="container">
-    """
+}
 
-    with logs_lock:
-        for session in ["acc1","acc2","acc3","acc4","acc5","acc6"]:
-            logs = session_logs.get(session, [])
+.header{
 
-            html += f"""
-            <div class="panel">
-                <div class="panel-title">{session.upper()}</div>
-            """
+    width:100%;
 
-            if logs:
-                for line in logs[-200:]:
-                    html += f'<div class="log-line">{line}</div>'
-            else:
-                html += '<div class="log-line">Waiting for logs...</div>'
+    text-align:center;
 
-            html += "</div>"
+    font-size:34px;
+
+    font-weight:bold;
+
+    color:#00ff88;
+
+    border:2px solid #00ff88;
+
+    border-radius:12px;
+
+    padding:18px;
+
+    margin-bottom:25px;
+
+    box-shadow:
+        0 0 10px #00ff88,
+        0 0 25px #00ff88;
+
+    text-shadow:
+        0 0 8px #00ff88;
+
+}
+
+.container{
+
+    display:grid;
+
+    grid-template-columns:repeat(auto-fit,minmax(340px,1fr));
+
+    gap:20px;
+
+}
+
+.panel{
+
+    background:#111827;
+
+    border:2px solid #00ff88;
+
+    border-radius:12px;
+
+    box-shadow:
+        0 0 8px #00ff88;
+
+    overflow:hidden;
+
+    height:78vh;
+
+    display:flex;
+
+    flex-direction:column;
+
+}
+
+.panel-title{
+
+    position:sticky;
+
+    top:0;
+
+    background:#0b1320;
+
+    padding:14px;
+
+    text-align:center;
+
+    font-size:18px;
+
+    font-weight:bold;
+
+    border-bottom:2px solid #00ff88;
+
+    color:#00ff88;
+
+    z-index:10;
+
+}
+
+.logs{
+
+    flex:1;
+
+    overflow-y:auto;
+
+    padding:12px;
+
+}
+
+.log-line{
+
+    margin-bottom:8px;
+
+    white-space:pre-wrap;
+
+    word-break:break-word;
+
+}
+
+.logs::-webkit-scrollbar{
+
+    width:8px;
+
+}
+
+.logs::-webkit-scrollbar-thumb{
+
+    background:#00ff88;
+
+    border-radius:20px;
+
+}
+
+.panel:hover{
+
+    box-shadow:
+        0 0 20px #00ff88;
+
+}
+
+.footer{
+
+    text-align:center;
+
+    color:#00ff88;
+
+    opacity:.7;
+
+    margin-top:18px;
+
+    font-size:13px;
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="header">
+
+✦ SINISTERS ⚡ SX⁷ ✦
+
+</div>
+
+<div class="container">
+"""
+
+    for user in USERS:
+
+        html += f"""
+
+<div class="panel">
+
+<div class="panel-title">
+
+🟢 {user}
+
+</div>
+
+<div class="logs">
+"""
+
+        if logs_ui[user]:
+
+            for line in logs_ui[user]:
+
+                html += f'<div class="log-line">{line}</div>'
+
+        else:
+
+            html += '<div class="log-line">Waiting for activity...</div>'
+
+        html += """
+
+</div>
+
+</div>
+
+"""
 
     html += """
-        </div>
 
-        <script>
-            function scrollPanels(){
-                document.querySelectorAll(".panel").forEach(function(panel){
-                    panel.scrollTop = panel.scrollHeight;
-                });
-            }
+</div>
 
-            window.onload = scrollPanels;
-            setInterval(scrollPanels,1000);
-        </script>
+<div class="footer">
 
-    </body>
-    </html>
-    """
+LIVE DASHBOARD • AUTO REFRESH EVERY 2 SECONDS
+
+</div>
+
+<script>
+
+function scrollPanels(){
+
+    document.querySelectorAll(".logs").forEach(function(panel){
+
+        panel.scrollTop=panel.scrollHeight;
+
+    });
+
+}
+
+window.onload=scrollPanels;
+
+setInterval(scrollPanels,1000);
+
+</script>
+
+</body>
+
+</html>
+
+"""
 
     return html
 # --------- Utility helpers ----------
