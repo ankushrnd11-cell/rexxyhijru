@@ -6,15 +6,17 @@ import requests
 import json
 from flask import Flask, jsonify
 from instagrapi import Client  # [web:16]
+import logging
+from werkzeug.serving import WSGIRequestHandler
 
-# --------- CONFIG (via env) ----------
-SESSION_ID_1 = os.getenv("SESSION_ID_1")
-SESSION_ID_2 = os.getenv("SESSION_ID_2")
-SESSION_ID_3 = os.getenv("SESSION_ID_3")
-SESSION_ID_4 = os.getenv("SESSION_ID_4")
-SESSION_ID_5 = os.getenv("SESSION_ID_5")
-SESSION_ID_6 = os.getenv("SESSION_ID_6")
-GROUP_IDS = os.getenv("GROUP_IDS", "")  # comma separated thread ids
+
+SESSIONID_1 = os.getenv("SESSIONID_1", "")
+SESSIONID_2 = os.getenv("SESSIONID_2", "")
+SESSIONID_3 = os.getenv("SESSIONID_3", "")
+SESSIONID_4 = os.getenv("SESSIONID_4", "")
+SESSIONID_5 = os.getenv("SESSIONID_5", "")
+SESSIONID_6 = os.getenv("SESSIONID_6", "")
+GROUP_IDS = os.getenv("GROUP_IDS", "")  
 MESSAGE_TEXT = os.getenv("MESSAGE_TEXT", "Hello 👋")
 SELF_URL = os.getenv("SELF_URL", "")
 NC_TITLES_RAW = os.getenv("NC_TITLES", "") 
@@ -31,6 +33,14 @@ DOC_ID = os.getenv("DOC_ID", "29088580780787855")
 CSRF_TOKEN = os.getenv("CSRF_TOKEN", "")
 
 app = Flask(__name__)
+
+log = logging.getLogger("werkzeug")
+log.disabled = True
+app.logger.disabled = True
+
+WSGIRequestHandler.log_request = lambda *args, **kwargs: None
+WSGIRequestHandler.log = lambda *args, **kwargs: None
+
 MAX_SESSION_LOGS = 200
 session_logs = {
     "acc1": [],
@@ -42,6 +52,12 @@ session_logs = {
     "system": []
 }
 logs_lock = threading.Lock()
+START_TIME = time.time()
+account_status = {}
+USERS = []
+
+from collections import defaultdict
+logs_ui = defaultdict(list)
 
 def _push_log(session, msg):
     if session not in session_logs:
@@ -57,6 +73,14 @@ def log(msg, session="system"):
     print(line, flush=True)
     _push_log(session, msg)
 
+def ui_log(user, message):
+    if user not in USERS:
+        USERS.append(user)
+
+    logs_ui[user].append(message)
+
+    if len(logs_ui[user]) > 35:
+        logs_ui[user].pop(0)
 
 @app.route("/health")
 def health():
@@ -99,7 +123,155 @@ def status():
         "system_last": system_last
     })
 
-# --------- Utility helpers ----------
+
+@app.route("/dashboard")
+def dashboard():
+    runtime = int(time.time() - START_TIME)
+
+    h = runtime // 3600
+    m = (runtime % 3600) // 60
+    s = runtime % 60
+
+    runtime_text = f"{h:02}:{m:02}:{s:02}"
+
+    html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+
+<title>SINISTERS ⚡ SX⁷</title>
+
+<meta http-equiv="refresh" content="2">
+
+<style>
+
+body{{
+background:#efefef;
+font-family:Arial,sans-serif;
+margin:0;
+padding:35px;
+color:#111;
+}}
+
+.header{{
+background:white;
+border:2px solid #111;
+border-radius:12px;
+padding:20px;
+text-align:center;
+margin-bottom:25px;
+}}
+
+.title{{
+font-size:34px;
+font-weight:bold;
+}}
+
+.runtime{{
+margin-top:10px;
+font-size:20px;
+}}
+
+.container{{
+display:flex;
+flex-wrap:wrap;
+gap:20px;
+}}
+
+.box{{
+background:white;
+border:2px solid #111;
+border-radius:12px;
+width:320px;
+height:520px;
+padding:15px;
+overflow-y:auto;
+box-sizing:border-box;
+}}
+
+.username{{
+font-size:22px;
+font-weight:bold;
+border-bottom:2px solid #111;
+padding-bottom:8px;
+margin-bottom:8px;
+}}
+
+.status{{
+font-size:18px;
+margin-bottom:15px;
+}}
+
+.log{{
+padding:4px 0;
+font-size:15px;
+word-break:break-word;
+}}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="header">
+
+<div class="title">
+SINISTERS ⚡ SX⁷
+</div>
+
+<div class="runtime">
+RUNTIME ⏳ {runtime_text}
+</div>
+
+</div>
+
+<div class="container">
+"""
+
+    for user in USERS:
+
+        html += f"""
+
+<div class="box">
+
+<div class="username">{user}</div>
+
+<div class="status">
+{account_status.get(user,"❌ INACTIVE")}
+</div>
+
+"""
+
+        for line in logs_ui[user][-35:]:
+
+            html += f'<div class="log">{line}</div>'
+
+        html += "</div>"
+
+    html += """
+
+</div>
+
+<script>
+
+document.querySelectorAll('.box').forEach(function(b){
+
+b.scrollTop=b.scrollHeight;
+
+});
+
+</script>
+
+</body>
+
+</html>
+
+"""
+
+    return html
+
+
 def decode_session(session):
     if not session:
         return session
@@ -107,8 +279,25 @@ def decode_session(session):
         return urllib.parse.unquote(session)
     except Exception:
         return session
+    
 
-# --------- Instagram helpers ----------
+def parse_session(raw):
+    if not raw:
+        return None
+
+    raw = raw.strip()
+
+    if "|" not in raw:
+        return None
+
+    username, sessionid = raw.split("|", 1)
+
+    return {
+        "username": username.strip(),
+        "sessionid": decode_session(sessionid.strip())
+    }
+
+
 def login_session(session_id, name_hint=""):
     session_id = decode_session(session_id)
     try:
@@ -124,10 +313,10 @@ def login_session(session_id, name_hint=""):
 def safe_send_message(cl, gid, msg, acc_name):
     try:
         cl.direct_send(msg, thread_ids=[int(gid)])  # [web:16]
-        log(f"✅ {getattr(cl,'username','?')} sent to {gid}", session=acc_name)
+        ui_log(acc_name, f"📨 SENT - {gid}")
         return True
     except Exception as e:
-        log(f"⚠ Send failed ({getattr(cl,'username','?')}) -> {gid}: {e}", session=acc_name)
+        ui_log(acc_name, "❌ SENT FAILED")
         return False
 
 def safe_change_title_direct(cl, gid, new_title, acc_name):
@@ -135,18 +324,9 @@ def safe_change_title_direct(cl, gid, new_title, acc_name):
         tt = cl.direct_thread(int(gid))  # [web:16]
         try:
             tt.update_title(new_title)
-            log(
-                f"📝 {getattr(cl,'username','?')} changed title (direct) for {gid} -> {new_title}",
-                session=acc_name
-            )
             return True
         except Exception:
-            log(
-                f"⚠ direct .update_title() failed for {gid} — will attempt GraphQL fallback",
-                session=acc_name
-            )
-    except Exception:
-        pass
+            pass
 
     try:
         headers = {
@@ -165,31 +345,18 @@ def safe_change_title_direct(cl, gid, new_title, acc_name):
             try:
                 result = resp.json()
                 if "errors" in result:
-                    log(
-                        f"❌ GraphQL title change errors for {gid}: {result['errors']}",
-                        session=acc_name
-                    )
                     return False
-                log(
-                    f"📝 {getattr(cl,'username','?')} changed title (graphql) for {gid} -> {new_title}",
-                    session=acc_name
-                )
+                ui_log(acc_name, f"⚡ {new_title}")
                 return True
             except Exception as e:
-                log(
-                    f"⚠ Title change unexpected response for {gid}: {e} (status {resp.status_code})",
-                    session=acc_name
-                )
                 return False
         except Exception as e:
-            log(f"⚠ Exception performing GraphQL title change for {gid}: {e}", session=acc_name)
             return False
     except Exception as e:
-        log(f"⚠ Unexpected fallback error for title change {gid}: {e}", session=acc_name)
         return False
 
 # --------- Loops ----------
-def spam_loop(accounts, groups):
+def spam_loop(accounts, groups, message_delay):
     if not groups:
         log("⚠ No groups for messaging loop.", session="system")
         return
@@ -229,7 +396,7 @@ def spam_loop(accounts, groups):
             log(f"❌ Exception in {acc_name} message loop: {e}", session=acc_name)
             acc["cooldown_until"] = time.time() + COOLDOWN_ON_ERROR
 
-        time.sleep(SPAM_GAP_BETWEEN_ACCOUNTS)
+        time.sleep(message_delay)
         idx = (idx + 1) % n
 
 
@@ -244,7 +411,7 @@ def parse_nc_titles():
         base.append(default_title)
     return base[:6]
 
-def nc_loop(accounts, groups, titles_map):
+def nc_loop(accounts, groups, titles_map, rename_delay):
     if not groups:
         log("⚠ No groups for title loop.", session="system")
         return
@@ -286,7 +453,7 @@ def nc_loop(accounts, groups, titles_map):
             log(f"❌ Exception in {acc_name} nc loop: {e}", session=acc_name)
             acc["cooldown_until"] = time.time() + COOLDOWN_ON_ERROR
 
-        time.sleep(NC_ACC_GAP)
+        time.sleep(rename_delay)
         idx = (idx + 1) % n
 
 
@@ -303,25 +470,27 @@ def self_ping_loop():
 def start_bot():
     log(
         "STARTUP: "
-        f"SESSION_ID_1={repr(SESSION_ID_1)}, "
-        f"SESSION_ID_2={repr(SESSION_ID_2)}, "
-        f"SESSION_ID_3={repr(SESSION_ID_3)}, "
-        f"SESSION_ID_4={repr(SESSION_ID_4)}, "
-        f"SESSION_ID_5={repr(SESSION_ID_5)}, "
-        f"SESSION_ID_6={repr(SESSION_ID_6)}, "
+        f"SESSIONID_1={repr(SESSIONID_1)}, "
+        f"SESSIONID_2={repr(SESSIONID_2)}, "
+        f"SESSIONID_3={repr(SESSIONID_3)}, "
+        f"SESSIONID_4={repr(SESSIONID_4)}, "
+        f"SESSIONID_5={repr(SESSIONID_5)}, "
+        f"SESSIONID_6={repr(SESSIONID_6)}, "
         f"GROUP_IDS={repr(GROUP_IDS)}, MESSAGE_TEXT={repr(MESSAGE_TEXT)}, "
         f"NC_TITLES={repr(NC_TITLES_RAW)}",
         session="system"
     )
 
-    sessions = [
-        decode_session(SESSION_ID_1),
-        decode_session(SESSION_ID_2),
-        decode_session(SESSION_ID_3),
-        decode_session(SESSION_ID_4),
-        decode_session(SESSION_ID_5),
-        decode_session(SESSION_ID_6),
+    session_entries = [
+        parse_session(SESSIONID_1),
+        parse_session(SESSIONID_2),
+        parse_session(SESSIONID_3),
+        parse_session(SESSIONID_4),
+        parse_session(SESSIONID_5),
+        parse_session(SESSIONID_6),
     ]
+
+    session_entries = [x for x in session_entries if x]
 
     groups = [g.strip() for g in GROUP_IDS.split(",") if g.strip()]
     if not groups:
@@ -337,28 +506,38 @@ def start_bot():
             log(f"⚠ GROUP_TITLES JSON parse error: {e}. Using fallback titles.", session="system")
 
     accounts = []
-    for i, s in enumerate(sessions, 1):
-        acc_name = f"acc{i}"
-        if not s:
-            log(f"⚠ No session for {acc_name}, keeping slot inactive", session=acc_name)
-            accounts.append({"name": acc_name, "client": None, "active": False, "cooldown_until": 0})
-            continue
+    for i, entry in enumerate(session_entries, 1):
+        acc_name = entry["username"]
 
         log(f"🔐 Logging in account {i}...", session="system")
-        cl = login_session(s, acc_name)
+        cl = login_session(entry["sessionid"], acc_name)
         if cl:
-            accounts.append({"name": acc_name, "client": cl, "active": True, "cooldown_until": 0})
+            if acc_name not in USERS:
+                USERS.append(acc_name)
+                
+            account_status[acc_name] = "✔ ACTIVE"
+            accounts.append({"name": acc_name, "username": entry["username"], "client": cl, "active": True, "status": "✔ ACTIVE", "cooldown_until": 0})
         else:
+            if acc_name not in USERS:
+                USERS.append(acc_name)
+                
+            account_status[acc_name] = "❌ INACTIVE"
             log(f"⚠ {acc_name} login failed, keeping slot inactive", session=acc_name)
-            accounts.append({"name": acc_name, "client": None, "active": False, "cooldown_until": 0})
+            accounts.append({"name": acc_name, "username": entry["username"], "client": None, "active": False, "status": "❌ INACTIVE", "cooldown_until": 0})
+
 
     # if ALL six are really inactive (no client), no point starting loops
     if not any(a["client"] for a in accounts):
         log("❌ No accounts logged in, aborting.", session="system")
         return
 
+    active_accounts = sum(1 for a in accounts if a["client"])
+
+    MESSAGE_DELAY = 45 / active_accounts
+    RENAME_DELAY = 180 / active_accounts
+
     try:
-        t1 = threading.Thread(target=spam_loop, args=(accounts, groups), daemon=True)
+        t1 = threading.Thread(target=spam_loop, args=(accounts, groups, MESSAGE_DELAY), daemon=True)
         t1.start()
         log(
             "▶ Started spam loop with 6 slots "
@@ -369,7 +548,7 @@ def start_bot():
         log(f"❌ Failed to start spam loop thread: {e}", session="system")
 
     try:
-        t2 = threading.Thread(target=nc_loop, args=(accounts, groups, titles_map), daemon=True)
+        t2 = threading.Thread(target=nc_loop, args=(accounts, groups, titles_map, RENAME_DELAY), daemon=True)
         t2.start()
         log(
             "▶ Started nc loop with 6 slots "
@@ -397,8 +576,9 @@ run_bot_once()
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "10000"))
-    log(f"HTTP server starting on port {port}", session="system")
-    try:
-        app.run(host="0.0.0.0", port=port)
-    except Exception as e:
-        log(f"❌ Flask run failed: {e}", session="system")
+    app.run(
+        host="0.0.0.0",
+        port=port,
+        debug=False,
+        use_reloader=False
+    )
