@@ -71,8 +71,16 @@ def _push_log(session, msg):
 
 def log(msg, session="system"):
     line = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}"
+
     print(line, flush=True)
+
     _push_log(session, msg)
+
+    if session in logs_ui:
+        logs_ui[session].append(line)
+
+        if len(logs_ui[session]) > MAX_SESSION_LOGS:
+            logs_ui[session].pop(0)
 
 
 @app.route("/health")
@@ -387,6 +395,8 @@ def login_session(session_id, name_hint=""):
         cl.login_by_sessionid(session_id)  # [web:16]
         uname = getattr(cl, "username", None) or name_hint or "unknown"
         account_names[name_hint] = uname
+        if name_hint not in USERS:
+            USERS.append(name_hint)
         log(f"✅ Logged in {uname}", session=name_hint or "system")
         return cl
     except Exception as e:
@@ -471,12 +481,12 @@ def spam_loop(accounts, groups):
 
     idx = 0
     n = len(accounts)
-    active_accounts = max(
-        1,
-        sum(1 for a in accounts if a["active"] and a["client"])
-    )
 
     while True:
+        active_accounts = max(
+            1,
+            sum(1 for a in accounts if a["active"] and a["client"])
+        )
         acc = accounts[idx]
         acc_name = acc["name"]
 
@@ -533,12 +543,12 @@ def nc_loop(accounts, groups, titles_map):
 
     idx = 0
     n = len(accounts)
-    active_accounts = max(
-        1,
-        sum(1 for a in accounts if a["active"] and a["client"])
-    )
 
     while True:
+        active_accounts = max(
+            1,
+            sum(1 for a in accounts if a["active"] and a["client"])
+        )
         acc = accounts[idx]
         acc_name = acc["name"]
         account_title = per_account_titles[idx]
@@ -641,22 +651,14 @@ def start_bot():
     try:
         t1 = threading.Thread(target=spam_loop, args=(accounts, groups), daemon=True)
         t1.start()
-        log(
-            "▶ Started spam loop with 6 slots "
-            f"({STARTED)",
-            session="system"
-        )
+        log("▶ Started spam loop", session="system")
     except Exception as e:
         log(f"❌ Failed to start spam loop thread: {e}", session="system")
 
     try:
         t2 = threading.Thread(target=nc_loop, args=(accounts, groups, titles_map), daemon=True)
         t2.start()
-        log(
-            "▶ Started nc loop with 6 slots "
-            f"({STARTED)",
-            session="system"
-        )
+        log("▶ Started rename loop", session="system")
     except Exception as e:
         log(f"❌ Failed to start nc loop thread: {e}", session="system")
 
