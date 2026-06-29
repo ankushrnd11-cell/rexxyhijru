@@ -327,21 +327,22 @@ def safe_change_title_direct(cl, gid, new_title, acc_name):
             return True
         except Exception:
             pass
-
-    try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-            "X-CSRFToken": CSRF_TOKEN,
-            "X-Requested-With": "XMLHttpRequest",
-            "Referer": f"https://www.instagram.com/direct/t/{gid}/",
-        }
-        cookies = {"csrftoken": CSRF_TOKEN}
+        
         try:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+                "X-CSRFToken": CSRF_TOKEN,
+                "X-Requested-With": "XMLHttpRequest",
+                "Referer": f"https://www.instagram.com/direct/t/{gid}/",
+                }
+            cookies = {"csrftoken": CSRF_TOKEN}
+        
             cl.private.headers.update(headers)
             cl.private.cookies.update(cookies)
             variables = {"thread_fbid": gid, "new_title": new_title}
             payload = {"doc_id": DOC_ID, "variables": json.dumps(variables)}
             resp = cl.private.post("https://www.instagram.com/api/graphql/", data=payload, timeout=10)
+
             try:
                 result = resp.json()
                 if "errors" in result:
