@@ -4,6 +4,7 @@ import threading
 import urllib.parse
 import requests
 import json
+import logging
 from flask import Flask, jsonify
 from instagrapi import Client  # [web:16]
 
@@ -28,6 +29,8 @@ SELF_PING_INTERVAL = int(os.getenv("SELF_PING_INTERVAL", "60"))
 COOLDOWN_ON_ERROR = int(os.getenv("COOLDOWN_ON_ERROR", "300"))
 DOC_ID = os.getenv("DOC_ID", "29088580780787855")
 CSRF_TOKEN = os.getenv("CSRF_TOKEN", "")
+
+logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
 app = Flask(__name__)
 MAX_SESSION_LOGS = 200
@@ -680,8 +683,17 @@ run_bot_once()
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "10000"))
-    log(f"HTTP server starting on port {port}", session="system")
+
     try:
-        app.run(host="0.0.0.0", port=port)
+        app.logger.disabled = True
+        logging.getLogger("werkzeug").disabled = True
+
+        app.run(
+            host="0.0.0.0",
+            port=port,
+            debug=False,
+            use_reloader=False
+        )
+
     except Exception as e:
         log(f"❌ Flask run failed: {e}", session="system")
