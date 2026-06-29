@@ -6,26 +6,21 @@ import requests
 import json
 from flask import Flask, jsonify
 from instagrapi import Client  # [web:16]
-import logging
-from werkzeug.serving import WSGIRequestHandler
-from flask import render_template_string
 
-
-# --------- CONFIG (via env) ----------
 SESSION_ID_1 = os.getenv("SESSION_ID_1")
 SESSION_ID_2 = os.getenv("SESSION_ID_2")
 SESSION_ID_3 = os.getenv("SESSION_ID_3")
 SESSION_ID_4 = os.getenv("SESSION_ID_4")
 SESSION_ID_5 = os.getenv("SESSION_ID_5")
 SESSION_ID_6 = os.getenv("SESSION_ID_6")
-GROUP_IDS = os.getenv("GROUP_IDS", "")  # comma separated thread ids
+GROUP_IDS = os.getenv("GROUP_IDS", "")
 MESSAGE_TEXT = os.getenv("MESSAGE_TEXT", "Hello 👋")
 SELF_URL = os.getenv("SELF_URL", "")
 NC_TITLES_RAW = os.getenv("NC_TITLES", "") 
 SPAM_START_OFFSET = int(os.getenv("SPAM_START_OFFSET", "1"))
-SPAM_GAP_BETWEEN_ACCOUNTS = int(os.getenv("SPAM_GAP_BETWEEN_ACCOUNTS", "6"))
+BASE_MESSAGE_INTERVAL = float(os.getenv("BASE_MESSAGE_INTERVAL", "40"))
 NC_START_OFFSET = int(os.getenv("NC_START_OFFSET", "1"))
-NC_ACC_GAP = int(os.getenv("NC_ACC_GAP", "30"))
+BASE_RENAME_INTERVAL = float(os.getenv("BASE_RENAME_INTERVAL", "180"))
 
 MSG_REFRESH_DELAY = int(os.getenv("MSG_REFRESH_DELAY", "1"))
 BURST_COUNT = int(os.getenv("BURST_COUNT", "1"))
@@ -35,25 +30,7 @@ DOC_ID = os.getenv("DOC_ID", "29088580780787855")
 CSRF_TOKEN = os.getenv("CSRF_TOKEN", "")
 
 app = Flask(__name__)
-log = logging.getLogger("werkzeug")
-log.setLevel(logging.ERROR)
-
-app.logger.disabled = True
-logging.getLogger("werkzeug").disabled = True
-
-class SilentHandler(WSGIRequestHandler):
-    def log(self, *args):
-        pass
-
-    def log_request(self, *args):
-        pass
-
-    def log_error(self, *args):
-        pass
-    
 MAX_SESSION_LOGS = 200
-dashboard = {}
-dashboard_lock = threading.Lock()
 session_logs = {
     "acc1": [],
     "acc2": [],
@@ -122,191 +99,118 @@ def status():
     })
 
 @app.route("/dashboard")
-def dashboard_page():
-    with dashboard_lock:
-        data = dict(dashboard)
+def dashboard():
+    html = """
+    <html>
+    <head>
+        <title>SINISTERS | SX⁷</title>
+        <meta http-equiv="refresh" content="2">
+        <style>
+            body{
+                background:#0d1117;
+                color:#00ff88;
+                font-family:Consolas,monospace;
+                margin:0;
+                padding:20px;
+            }
 
-    cards = ""
+            .header{
+                text-align:center;
+                font-size:30px;
+                font-weight:bold;
+                border:2px solid #00ff88;
+                padding:15px;
+                margin-bottom:25px;
+                box-shadow:0 0 20px #00ff88;
+            }
 
-    for _, acc in data.items():
-        username = acc.get("username", "-")
-        active = acc.get("active", False)
-        task = acc.get("task", "-")
-        tm = acc.get("time", "-")
+            .container{
+                display:flex;
+                flex-wrap:wrap;
+                gap:20px;
+            }
 
-        status = "ACTIVE" if active else "INACTIVE"
-        status_class = "active" if active else "inactive"
+            .panel{
+                flex:1;
+                min-width:320px;
+                background:#111827;
+                border:2px solid #00ff88;
+                box-shadow:0 0 15px #00ff88;
+                padding:15px;
+                height:80vh;
+                overflow-y:auto;
+            }
 
-        cards += f"""
-        <div class="card">
-            <div class="left">
-                <div class="username">@{username}</div>
-            </div>
+            .panel-title{
+                text-align:center;
+                font-size:18px;
+                font-weight:bold;
+                margin-bottom:12px;
+                border-bottom:1px solid #00ff88;
+                padding-bottom:8px;
+            }
 
-            <div class="center">
-                <div class="{status_class}">{status}</div>
-            </div>
+            .log-line{
+                margin-bottom:6px;
+                white-space:pre-wrap;
+                word-break:break-word;
+            }
 
-            <div class="right">
-                <div class="task">{task}</div>
-                <div class="time">{tm}</div>
-            </div>
+            ::-webkit-scrollbar{
+                width:6px;
+            }
+
+            ::-webkit-scrollbar-thumb{
+                background:#00ff88;
+            }
+        </style>
+    </head>
+
+    <body>
+
+        <div class="header">
+            ✦ SINISTERS ⚡ SX⁷ ✦
         </div>
-        """
 
-    html = f"""
-<!DOCTYPE html>
-<html>
+        <div class="container">
+    """
 
-<head>
+    with logs_lock:
+        for session in ["acc1","acc2","acc3","acc4","acc5","acc6"]:
+            logs = session_logs.get(session, [])
 
-<meta charset="UTF-8">
+            html += f"""
+            <div class="panel">
+                <div class="panel-title">{session.upper()}</div>
+            """
 
-<meta http-equiv="refresh" content="2">
+            if logs:
+                for line in logs[-200:]:
+                    html += f'<div class="log-line">{line}</div>'
+            else:
+                html += '<div class="log-line">Waiting for logs...</div>'
 
-<title>SINISTERS ⚡ SX⁷</title>
+            html += "</div>"
 
-<style>
+    html += """
+        </div>
 
-*{{
-margin:0;
-padding:0;
-box-sizing:border-box;
-font-family:Segoe UI,Arial,sans-serif;
-}}
+        <script>
+            function scrollPanels(){
+                document.querySelectorAll(".panel").forEach(function(panel){
+                    panel.scrollTop = panel.scrollHeight;
+                });
+            }
 
-body{{
-background:#070707;
-padding:40px;
-color:white;
-}}
+            window.onload = scrollPanels;
+            setInterval(scrollPanels,1000);
+        </script>
 
-.header{{
-width:100%;
-padding:20px;
-margin-bottom:35px;
-text-align:center;
-font-size:38px;
-font-weight:800;
-letter-spacing:3px;
-color:#00f7ff;
-border:2px solid #00f7ff;
-border-radius:18px;
-box-shadow:
-0 0 15px #00f7ff,
-0 0 35px #00f7ff;
-background:#101010;
-}}
+    </body>
+    </html>
+    """
 
-.container{{
-display:flex;
-flex-direction:column;
-gap:22px;
-}}
-
-.card{{
-display:flex;
-justify-content:space-between;
-align-items:center;
-padding:25px;
-background:#111;
-border:2px solid #00f7ff;
-border-radius:18px;
-box-shadow:
-0 0 15px #00f7ff55,
-0 0 30px #8a2be255;
-transition:.25s;
-}}
-
-.card:hover{{
-transform:scale(1.01);
-box-shadow:
-0 0 25px #00f7ff,
-0 0 45px #8a2be2;
-}}
-
-.left{{
-width:25%;
-}}
-
-.center{{
-width:20%;
-text-align:center;
-}}
-
-.right{{
-width:35%;
-display:flex;
-flex-direction:column;
-align-items:flex-end;
-}}
-
-.username{{
-font-size:30px;
-font-weight:bold;
-color:#ffe600;
-text-shadow:
-0 0 10px #ffe600,
-0 0 20px #ffe600;
-}}
-
-.active{{
-color:#00ff66;
-font-size:28px;
-font-weight:bold;
-text-shadow:0 0 12px #00ff66;
-}}
-
-.inactive{{
-color:#ff4040;
-font-size:28px;
-font-weight:bold;
-text-shadow:0 0 12px #ff4040;
-}}
-
-.task{{
-font-size:22px;
-padding:10px 18px;
-border:2px solid #00f7ff;
-border-radius:10px;
-background:#181818;
-box-shadow:0 0 12px #00f7ff55;
-}}
-
-.time{{
-margin-top:10px;
-padding:8px 16px;
-font-size:16px;
-border:2px solid #8a2be2;
-border-radius:10px;
-background:#101010;
-color:#00f7ff;
-box-shadow:0 0 10px #8a2be2;
-}}
-
-</style>
-
-</head>
-
-<body>
-
-<div class="header">
-SINISTERS ⚡ SX⁷
-</div>
-
-<div class="container">
-
-{cards}
-
-</div>
-
-</body>
-
-</html>
-"""
-
-    return render_template_string(html)
-
+    return html
 # --------- Utility helpers ----------
 def decode_session(session):
     if not session:
@@ -322,41 +226,17 @@ def login_session(session_id, name_hint=""):
     try:
         cl = Client()
         cl.login_by_sessionid(session_id)  # [web:16]
-
         uname = getattr(cl, "username", None) or name_hint or "unknown"
-
         log(f"✅ Logged in {uname}", session=name_hint or "system")
-
-        with dashboard_lock:
-            dashboard[name_hint] = {
-                "username": uname,
-                "active": True,
-                "task": "🔐 Logged In",
-                "time": time.strftime("%I:%M:%S %p IST")
-            }
-
         return cl
     except Exception as e:
         log(f"❌ Login failed ({name_hint}): {e}", session=name_hint or "system")
-
-        with dashboard_lock:
-            dashboard[name_hint] = {
-                "username": name_hint,
-                "active": False,
-                "task": "❌ Login Failed",
-                "time": time.strftime("%I:%M:%S %p IST")
-                }
         return None
 
 def safe_send_message(cl, gid, msg, acc_name):
     try:
         cl.direct_send(msg, thread_ids=[int(gid)])  # [web:16]
         log(f"✅ {getattr(cl,'username','?')} sent to {gid}", session=acc_name)
-
-        with dashboard_lock:
-            dashboard[acc_name]["task"] = f"📨 {gid}"
-            dashboard[acc_name]["time"] = time.strftime("%I:%M:%S %p IST")
-
         return True
     except Exception as e:
         log(f"⚠ Send failed ({getattr(cl,'username','?')}) -> {gid}: {e}", session=acc_name)
@@ -371,11 +251,6 @@ def safe_change_title_direct(cl, gid, new_title, acc_name):
                 f"📝 {getattr(cl,'username','?')} changed title (direct) for {gid} -> {new_title}",
                 session=acc_name
             )
-            
-            with dashboard_lock:
-                dashboard[acc_name]["task"] = f"💠 {new_title}"
-                dashboard[acc_name]["time"] = time.strftime("%I:%M:%S %p IST")
-                
             return True
         except Exception:
             log(
@@ -411,9 +286,6 @@ def safe_change_title_direct(cl, gid, new_title, acc_name):
                     f"📝 {getattr(cl,'username','?')} changed title (graphql) for {gid} -> {new_title}",
                     session=acc_name
                 )
-                with dashboard_lock:
-                    dashboard[acc_name]["task"] = f"💠 {new_title}"
-                    dashboard[acc_name]["time"] = time.strftime("%I:%M:%S %p IST")
                 return True
             except Exception as e:
                 log(
@@ -424,7 +296,6 @@ def safe_change_title_direct(cl, gid, new_title, acc_name):
         except Exception as e:
             log(f"⚠ Exception performing GraphQL title change for {gid}: {e}", session=acc_name)
             return False
-
 
     except Exception as e:
         log(f"⚠ Unexpected fallback error for title change {gid}: {e}", session=acc_name)
@@ -440,6 +311,10 @@ def spam_loop(accounts, groups):
 
     idx = 0
     n = len(accounts)
+    active_accounts = max(
+        1,
+        sum(1 for a in accounts if a["active"] and a["client"])
+    )
 
     while True:
         acc = accounts[idx]
@@ -471,7 +346,7 @@ def spam_loop(accounts, groups):
             log(f"❌ Exception in {acc_name} message loop: {e}", session=acc_name)
             acc["cooldown_until"] = time.time() + COOLDOWN_ON_ERROR
 
-        time.sleep(SPAM_GAP_BETWEEN_ACCOUNTS)
+        time.sleep(BASE_MESSAGE_INTERVAL / active_accounts)
         idx = (idx + 1) % n
 
 
@@ -498,6 +373,10 @@ def nc_loop(accounts, groups, titles_map):
 
     idx = 0
     n = len(accounts)
+    active_accounts = max(
+        1,
+        sum(1 for a in accounts if a["active"] and a["client"])
+    )
 
     while True:
         acc = accounts[idx]
@@ -528,7 +407,7 @@ def nc_loop(accounts, groups, titles_map):
             log(f"❌ Exception in {acc_name} nc loop: {e}", session=acc_name)
             acc["cooldown_until"] = time.time() + COOLDOWN_ON_ERROR
 
-        time.sleep(NC_ACC_GAP)
+        time.sleep(BASE_RENAME_INTERVAL / active_accounts)
         idx = (idx + 1) % n
 
 
@@ -641,12 +520,6 @@ if __name__ == "__main__":
     port = int(os.getenv("PORT", "10000"))
     log(f"HTTP server starting on port {port}", session="system")
     try:
-        app.run(
-            host="0.0.0.0",
-            port=port,
-            request_handler=SilentHandler,
-            use_reloader=False
-        )
-        
+        app.run(host="0.0.0.0", port=port)
     except Exception as e:
         log(f"❌ Flask run failed: {e}", session="system")
