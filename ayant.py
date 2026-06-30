@@ -47,15 +47,6 @@ dashboard_status = {
     "acc6": {}
 }
 
-def _push_log(session, msg):
-    if session not in session_logs:
-        session = "system"
-    with logs_lock:
-        session_logs[session].append(msg)
-        if len(session_logs[session]) > MAX_SESSION_LOGS:
-            session_logs[session].pop(0)
-
-
 def log(msg, session="system"):
     line = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}"
     print(line, flush=True)
@@ -65,46 +56,9 @@ def update_dashboard(acc_name, key, value):
         if acc_name in dashboard_status:
             dashboard_status[acc_name][key] = value
 
-@app.route("/health")
+@app.route("/")
 def health():
     return jsonify({"status": "ok", "message": "Bot process alive"})
-
-def summarize(lines):
-    rev = list(reversed(lines))
-    last_login = next((l for l in rev if "Logged in" in l), None)
-    last_send_ok = next((l for l in rev if "✅" in l and "sent to" in l), None)
-    last_send_err = next((l for l in rev if "Send failed" in l or "⚠ send failed" in l), None)
-    last_title_ok = next((l for l in rev if "changed title" in l and "📝" in l), None)
-    last_title_err = next((l for l in rev if "Title change" in l or "GraphQL title" in l), None)
-    return {
-        "last_login": last_login,
-        "last_send_ok": last_send_ok,
-        "last_send_error": last_send_err,
-        "last_title_ok": last_title_ok,
-        "last_title_error": last_title_err,
-    }
-
-@app.route("/status")
-def status():
-    with logs_lock:
-        acc1_logs = session_logs["acc1"][-80:]
-        acc2_logs = session_logs["acc2"][-80:]
-        acc3_logs = session_logs["acc3"][-80:]
-        acc4_logs = session_logs["acc4"][-80:]
-        acc5_logs = session_logs["acc5"][-80:]
-        acc6_logs = session_logs["acc6"][-80:]   
-        system_last = session_logs["system"][-5:]
-
-    return jsonify({
-        "ok": True,
-        "acc1": summarize(acc1_logs),
-        "acc2": summarize(acc2_logs),
-        "acc3": summarize(acc3_logs),
-        "acc4": summarize(acc4_logs),
-        "acc5": summarize(acc5_logs),
-        "acc6": summarize(acc6_logs),
-        "system_last": system_last
-    })
 
 @app.route("/dashboard")
 def dashboard():
@@ -272,18 +226,11 @@ ACTIVE SESSIONS : {len(active_cards)}
 
 def decode_session(session):
     if not session:
-        return None, None
-
+        return session
     try:
-        session = urllib.parse.unquote(session)
+        return urllib.parse.unquote(session)
     except Exception:
-        pass
-
-    if "|" in session:
-        username, sessionid = session.split("|", 1)
-        return username.strip(), sessionid.strip()
-
-    return "Unknown", session.strip()
+        return session
 
 def login_session(session_id, name_hint=""):
     session_id = decode_session(session_id)
@@ -533,9 +480,25 @@ def start_bot():
             log(f"⚠ GROUP_TITLES JSON parse error: {e}. Using fallback titles.", session="system")
 
     accounts = []
-    for i, data in enumerate(sessions, 1):
-        username, sessionid = data
+    for i, s in enumerate(sessions, 1):
+        
         acc_name = f"acc{i}"
+        if not s:
+            accounts.append({
+                "name": acc_name,
+                "display_name": f"USER {i}",
+                "client": None,
+                "active": False,
+                "cooldown_until": 0
+            })
+            continue
+
+        if "|" in s:
+            username, sessionid = s.split("|", 1)
+        else:
+            username = f"USER {i}"
+            sessionid = s
+            acc_name = f"acc{i}"
 
         if not sessionid:
             accounts.append({"name": acc_name, "display_name": username or f"USER {i}", "client": None, "active": False, "cooldown_until": 0})
