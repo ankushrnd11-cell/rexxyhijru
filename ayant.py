@@ -532,20 +532,20 @@ def start_bot():
         t1 = threading.Thread(target=spam_loop, args=(accounts, groups), daemon=True)
         t1.start()
         log(
-            "▶ Started spam loop with 6 slots "
-            f"({SPAM_START_OFFSET}s start, {SPAM_GAP_BETWEEN_ACCOUNTS}s gap between slots)",
+            "▶ Started spam loop",
             session="system"
         )
     except Exception as e:
         log(f"❌ Failed to start spam loop thread: {e}", session="system")
 
+    try:
         t2 = threading.Thread(target=nc_loop, args=(accounts, groups, titles_map), daemon=True)
         t2.start()
         log(
-            "▶ Started nc loop with 6 slots "
-            f"({NC_START_OFFSET}s start, {NC_ACC_GAP}s gap between slots)",
+            "▶ Started nc loop",
             session="system"
         )
+
     except Exception as e:
         log(f"❌ Failed to start nc loop thread: {e}", session="system")
 
@@ -574,3 +574,4 @@ if __name__ == "__main__":
         debug=False,
         use_reloader=False
     )
+
