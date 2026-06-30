@@ -53,7 +53,20 @@ def log(msg, session="system"):
 
 def update_dashboard(acc_name, key, value):
     with logs_lock:
-        if acc_name in dashboard_status:
+
+        if acc_name not in dashboard_status:
+            return
+
+        if key == "log":
+
+            dashboard_status[acc_name].setdefault("logs", [])
+
+            dashboard_status[acc_name]["logs"].append(value)
+
+            if len(dashboard_status[acc_name]["logs"]) > 20:
+                dashboard_status[acc_name]["logs"].pop(0)
+
+        else:
             dashboard_status[acc_name][key] = value
 
 @app.route("/")
@@ -201,11 +214,7 @@ RUNTIME ⏳ {runtime}
 </div>
 
 <div class="row">
-{acc.get("sent","-")}
-</div>
-
-<div class="row">
-{acc.get("rename","-")}
+{"<br>".join(acc.get("logs", []))}
 </div>
 
 </div>
@@ -251,7 +260,7 @@ def safe_send_message(cl, gid, msg, acc_name):
 
         update_dashboard(
             acc_name,
-            "sent",
+            "log",
             f"📨 SENT - {gid}"
         )
 
@@ -260,7 +269,7 @@ def safe_send_message(cl, gid, msg, acc_name):
         log(f"⚠ Send failed ({getattr(cl,'username','?')}) -> {gid}: {e}", session=acc_name)
         update_dashboard(
             acc_name,
-            "sent",
+            "log",
             "❌ SENT FAILED"
         )
         return False
@@ -312,7 +321,7 @@ def safe_change_title_direct(cl, gid, new_title, acc_name):
 
                 update_dashboard(
                     acc_name,
-                    "rename",
+                    "log",
                     f"⚡ {new_title}"
                 )
                 return True
@@ -324,7 +333,7 @@ def safe_change_title_direct(cl, gid, new_title, acc_name):
 
                 update_dashboard(
                     acc_name,
-                    "rename",
+                    "log",
                     "❌ RENAME FAILED"
                 )
                 return False
