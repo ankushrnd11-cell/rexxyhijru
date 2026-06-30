@@ -557,7 +557,7 @@ def start_bot():
             update_dashboard(acc_name, "username", username)
             update_dashboard(acc_name, "status", "❌ INACTIVE")
             update_dashboard(acc_name, "sent", "-")
-            pdate_dashboard(acc_name, "rename", "-")
+            update_dashboard(acc_name, "rename", "-")
 
             accounts.append({"name": acc_name, "display_name": username, "client": None, "active": False, "cooldown_until": 0})
 
